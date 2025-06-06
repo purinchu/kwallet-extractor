@@ -1,12 +1,26 @@
+#!/usr/bin/env python
+
 # /// script
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
 
+import argparse
 
+# "uv tool run mypy kwallet-extractor" for type checking
 def main() -> None:
-    print("Hello from kwallet-extractor!")
+    # parse cmdline args
+    parser = argparse.ArgumentParser(
+            description='Extracts passwords and credentials from KWallet XML files'
+            )
+    parser.add_argument('-a', '--all-fields', action='store_true',
+                        help='Extract from all KWallet folders, not just "Passwords"')
+    parser.add_argument('input',
+                        help='Path to XML export to read')
 
+    args = parser.parse_args()
+
+    print(f"Reading {args.input}")
 
 if __name__ == "__main__":
     main()
