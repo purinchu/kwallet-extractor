@@ -5,10 +5,12 @@
 # dependencies = []
 # ///
 
-from typing import Any
+from typing import Any, TypeAlias
 import argparse
 import sys
 import xml.etree.ElementTree as ET
+
+EntryDict: TypeAlias = dict[str, str]
 
 # "uv tool run mypy --strict kwallet-extractor" for type checking
 def main() -> None:
@@ -28,7 +30,7 @@ def main() -> None:
     try:
         root = parse_xml(args.input)
 
-        out: dict[str, str] = dict()
+        out: EntryDict = dict()
 
         for folder in root:
             if folder.tag != 'folder':
@@ -45,7 +47,7 @@ def main() -> None:
             for entry in folder:
                 entry_name = entry.attrib.get('name') or ''
                 key = '/'.join([folder_name, entry_name])
-                child_entries: dict[str, str] = dict()
+                child_entries: EntryDict = dict()
 
                 if len(entry) == 0: # No children, should be a <password>
                     if entry.tag == 'password':
@@ -65,7 +67,7 @@ def main() -> None:
         print(f"Ran into an error while reading {args.input}:\n{e}")
         sys.exit(1)
 
-def merge_entries(parent: dict[str, str], children: dict[str, str]) -> dict[str, str]:
+def merge_entries(parent: EntryDict, children: EntryDict) -> EntryDict:
     out = parent
 
     for key in children:
@@ -75,7 +77,7 @@ def merge_entries(parent: dict[str, str], children: dict[str, str]) -> dict[str,
     out |= children
     return out
 
-def extract_pw_entry(pw_elem: ET.Element, base_key: str) -> dict[str, str]:
+def extract_pw_entry(pw_elem: ET.Element, base_key: str) -> EntryDict:
     if pw_elem.tag != 'password':
         raise Exception(f"Encountered <{pw_elem.tag}> when <password> expected!")
 
@@ -84,7 +86,7 @@ def extract_pw_entry(pw_elem: ET.Element, base_key: str) -> dict[str, str]:
 
     return map_entries
 
-def extract_map_entries(map_elem: ET.Element, base_key: str) -> dict[str, str]:
+def extract_map_entries(map_elem: ET.Element, base_key: str) -> EntryDict:
     map_entries = dict()
 
     for child_entry in map_elem:
@@ -111,7 +113,7 @@ def extract_map_entries(map_elem: ET.Element, base_key: str) -> dict[str, str]:
 
     return map_entries
 
-def serialize(entries: dict[str, str]) -> None:
+def serialize(entries: EntryDict) -> None:
     for name, pw in sorted(entries.items()):
         print (f'{name},"{pw}"')
 
