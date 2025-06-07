@@ -18,6 +18,8 @@ def main() -> None:
             )
     parser.add_argument('-a', '--all-fields', action='store_true',
                         help='Extract from all KWallet folders, not just "Passwords"')
+    parser.add_argument('--show-chrome-form-data', action='store_true',
+                        help='Also output Google Chrome form data if present')
     parser.add_argument('input',
                         help='Path to XML export to read')
 
@@ -35,7 +37,10 @@ def main() -> None:
             name = folder.attrib.get('name', '')
             num_children = len(folder)
 
-            print(f"Handling folder {name} with {num_children} items")
+            if name.startswith("Chrome Form Data") and not args.show_chrome_form_data:
+                continue
+
+            print(f"Handling folder {name} with {num_children} items", file=sys.stderr)
 
             for entry in folder:
                 entry_name = entry.attrib.get('name') or ''
@@ -56,8 +61,6 @@ def main() -> None:
                             raise Exception(f"Value for map {child_key} would be overwritten by a different value!")
 
                     out |= child_entries
-
-        print(f"Done reading {len(out)} entries")
 
         serialize(out)
 
@@ -80,7 +83,7 @@ def extract_map_entries(map_elem: ET.Element, base_key: str) -> dict[str, str]:
         # Bugzilla passwords there will be a <mapentry name="">password</mapentry> with two more
         # 'normal' map entries with the actual username/password.
         if child_entry_name is None or len(child_entry_name) < 1:
-            print (f"Ignoring mapentry for {base_key} with an empty name")
+            print (f"Ignoring mapentry for {base_key} with an empty name", file=sys.stderr)
             continue
 
         # Likewise there can be empty form data values for things like address fields left blank.
