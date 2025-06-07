@@ -25,10 +25,75 @@ def main() -> None:
 
     try:
         root = parse_xml(args.input)
+
+        out = dict()
+        for folder in root:
+            if folder.tag != 'folder':
+                raise Exception(f"Encountered invalid folder tag <{folder.tag}>")
+
+            name = folder.attrib.get('name')
+            num_children = len(folder)
+
+            print(f"Handling folder {name} with {num_children} items")
+
+            for entry in folder:
+                entry_name = entry.attrib.get('name')
+                entry_type = entry.tag
+                key = '/'.join([name, entry_type, entry_name])
+
+                if len(entry) == 0:
+                    value = entry.text or ''
+
+                    if key in out and out[key] != value:
+                        raise Exception(f"Value for {key} would be overwritten by a different value!")
+
+                    out[key] = value
+                else:
+                    child_entries = extract_map_entries(entry, key)
+                    for child_key in child_entries:
+                        if child_key in out and out[child_key] != child_entries[child_key]:
+                            raise Exception(f"Value for map {child_key} would be overwritten by a different value!")
+
+                    out |= child_entries
+
+        print(f"Done reading {len(out)} entries")
+
+        serialize(out)
+
     except Exception as e:
         # Some kind of error encountered
         print(f"Ran into an error while reading {args.input}:\n{e}")
         sys.exit(1)
+
+def extract_map_entries(map_elem: ET.Element, base_key: str) -> dict[str, str]:
+    map_entries = dict()
+
+    for child_entry in map_elem:
+        if child_entry.tag != 'mapentry':
+            raise Exception(f"Encountered <{child_entry.tag}> when <mapentry> expected!")
+
+        child_entry_name = child_entry.attrib.get('name')
+        child_entry_value = child_entry.text or ''
+
+        # This can happen on old XML exports dating back to KDE 3 times, apparently. For some of my
+        # Bugzilla passwords there will be a <mapentry name="">password</mapentry> with two more
+        # 'normal' map entries with the actual username/password.
+        if child_entry_name is None or len(child_entry_name) < 1:
+            print (f"Ignoring mapentry for {base_key} with an empty name")
+            continue
+
+        # Likewise there can be empty form data values for things like address fields left blank.
+        # We can just skip these without a warning
+        if len(child_entry_value) < 1:
+            continue
+
+        key = '/'.join([base_key, child_entry_name])
+        map_entries[key] = child_entry_value
+
+    return map_entries
+
+def serialize(entries: dict[str, str]) -> None:
+    pass
 
 def parse_xml(filename: str) -> ET.Element:
     tree = ET.parse(filename)
