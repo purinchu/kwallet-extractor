@@ -39,6 +39,7 @@ def main() -> None:
             folder_name = folder.attrib.get('name', '')
             num_children = len(folder)
 
+            # Ignore Chrome data by default as it is in custom binary format
             if folder_name.startswith("Chrome Form Data") and not args.show_chrome_form_data:
                 continue
 
@@ -49,17 +50,18 @@ def main() -> None:
                 key = '/'.join([folder_name, entry_name])
                 child_entries: EntryDict = dict()
 
-                if len(entry) == 0: # No children, should be a <password>
-                    if entry.tag == 'password':
+                if len(entry) == 0: # No children
+                    if entry.tag == 'password': # 99.9% of time
                         child_entries = extract_pw_entry(entry, key)
                     else:
-                        # <stream> not handled but could be?
-                        print(f"Ignoring <stream> data under {folder_name}/{entry_name}", file=sys.stderr)
+                        # But a <stream> is also possible, and unhandled
+                        print(f"Ignoring <{entry.tag}> data under {folder_name}/{entry_name}", file=sys.stderr)
                 else:
                     child_entries = extract_map_entries(entry, key)
 
                 out = merge_entries(out, child_entries)
 
+        print(f"Recorded {len(out.keys())} credential entries for output", file=sys.stderr)
         serialize(out)
 
     except Exception as e:
