@@ -66,7 +66,7 @@ def main() -> None:
 
     except Exception as e:
         # Some kind of error encountered
-        print(f"Ran into an error while reading {args.input}:\n{e}")
+        print(f"Ran into an error while reading {args.input}:\n{e}", file=sys.stderr)
         sys.exit(1)
 
 def merge_entries(parent: EntryDict, children: EntryDict) -> EntryDict:
