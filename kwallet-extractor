@@ -97,7 +97,7 @@ def extract_map_entries(map_elem: ET.Element, base_key: str) -> dict[str, str]:
     return map_entries
 
 def serialize(entries: dict[str, str]) -> None:
-    for name, pw in entries.items():
+    for name, pw in sorted(entries.items()):
         print (f'{name},"{pw}"')
 
 def parse_xml(filename: str) -> ET.Element:
