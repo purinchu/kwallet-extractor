@@ -34,33 +34,29 @@ def main() -> None:
             if folder.tag != 'folder':
                 raise Exception(f"Encountered invalid folder tag <{folder.tag}>")
 
-            name = folder.attrib.get('name', '')
+            folder_name = folder.attrib.get('name', '')
             num_children = len(folder)
 
-            if name.startswith("Chrome Form Data") and not args.show_chrome_form_data:
+            if folder_name.startswith("Chrome Form Data") and not args.show_chrome_form_data:
                 continue
 
-            print(f"Handling folder {name} with {num_children} items", file=sys.stderr)
+            print(f"Handling folder {folder_name} with {num_children} items", file=sys.stderr)
 
             for entry in folder:
                 entry_name = entry.attrib.get('name') or ''
-                entry_type = entry.tag
-                key = '/'.join([name, entry_name])
+                key = '/'.join([folder_name, entry_name])
+                child_entries: dict[str, str] = dict()
 
-                if len(entry) == 0:
-                    value = entry.text or ''
-
-                    if key in out and out[key] != value:
-                        raise Exception(f"Value for {key} would be overwritten by a different value!")
-
-                    out[key] = value
+                if len(entry) == 0: # No children, should be a <password>
+                    if entry.tag == 'password':
+                        child_entries = extract_pw_entry(entry, key)
+                    else:
+                        # <stream> not handled but could be?
+                        print(f"Ignoring <stream> data under {folder_name}/{entry_name}", file=sys.stderr)
                 else:
                     child_entries = extract_map_entries(entry, key)
-                    for child_key in child_entries:
-                        if child_key in out and out[child_key] != child_entries[child_key]:
-                            raise Exception(f"Value for map {child_key} would be overwritten by a different value!")
 
-                    out |= child_entries
+                out = merge_entries(out, child_entries)
 
         serialize(out)
 
@@ -68,6 +64,25 @@ def main() -> None:
         # Some kind of error encountered
         print(f"Ran into an error while reading {args.input}:\n{e}")
         sys.exit(1)
+
+def merge_entries(parent: dict[str, str], children: dict[str, str]) -> dict[str, str]:
+    out = parent
+
+    for key in children:
+        if key in out and out[key] != children[key]:
+            raise Exception(f"Value for {key} would be overwritten by a different value!")
+
+    out |= children
+    return out
+
+def extract_pw_entry(pw_elem: ET.Element, base_key: str) -> dict[str, str]:
+    if pw_elem.tag != 'password':
+        raise Exception(f"Encountered <{pw_elem.tag}> when <password> expected!")
+
+    value = pw_elem.text or ''
+    map_entries = { base_key: value }
+
+    return map_entries
 
 def extract_map_entries(map_elem: ET.Element, base_key: str) -> dict[str, str]:
     map_entries = dict()
