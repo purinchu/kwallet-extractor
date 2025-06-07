@@ -45,7 +45,7 @@ def main() -> None:
             for entry in folder:
                 entry_name = entry.attrib.get('name') or ''
                 entry_type = entry.tag
-                key = '/'.join([name, entry_type, entry_name])
+                key = '/'.join([name, entry_name])
 
                 if len(entry) == 0:
                     value = entry.text or ''
