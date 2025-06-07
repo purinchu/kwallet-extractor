@@ -26,18 +26,19 @@ def main() -> None:
     try:
         root = parse_xml(args.input)
 
-        out = dict()
+        out: dict[str, str] = dict()
+
         for folder in root:
             if folder.tag != 'folder':
                 raise Exception(f"Encountered invalid folder tag <{folder.tag}>")
 
-            name = folder.attrib.get('name')
+            name = folder.attrib.get('name', '')
             num_children = len(folder)
 
             print(f"Handling folder {name} with {num_children} items")
 
             for entry in folder:
-                entry_name = entry.attrib.get('name')
+                entry_name = entry.attrib.get('name') or ''
                 entry_type = entry.tag
                 key = '/'.join([name, entry_type, entry_name])
 
