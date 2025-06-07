@@ -23,21 +23,21 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if parse_xml(args.input):
-        sys.exit()
-
-    # Some kind of error encountered
-    sys.exit(1)
-
-def parse_xml(filename: str) -> bool:
     try:
-        tree = ET.parse(filename)
-        root = tree.getroot()
-        return True
+        root = parse_xml(args.input)
     except Exception as e:
-        print(f"Got exception reading {filename}:\n{e}")
+        # Some kind of error encountered
+        print(f"Ran into an error while reading {args.input}:\n{e}")
+        sys.exit(1)
 
-    return False
+def parse_xml(filename: str) -> ET.Element:
+    tree = ET.parse(filename)
+    root = tree.getroot()
+
+    if root.tag != "wallet":
+        raise Exception(f"The wallet XML had the wrong root element! Expected <wallet>, got <{root.tag}>")
+
+    return root
 
 if __name__ == "__main__":
     main()
