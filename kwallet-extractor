@@ -175,7 +175,12 @@ class KWalletPasswordExtractor:
                 if lc_child_entry_name in exact_guesses:
                     map_key = 'username'
 
-            map_entries[map_key] = child_entry_value
+            if map_key == 'other':
+                map_entries[map_key] += f" {child_entry_value}"
+            elif map_entries[map_key] == '' or map_entries[map_key] == child_entry_value:
+                map_entries[map_key] = child_entry_value
+            else:
+                map_entries[map_key] += f" OR {child_entry_value}"
 
         return {entry_name: map_entries}
 
