@@ -203,7 +203,7 @@ def main() -> None:
         extractor.set_show_chrome_form_data(args.show_chrome_form_data)
         extractor.set_verbose(args.verbose)
         if not args.all_fields:
-            folder_list = ['Passwords', 'Personal']
+            folder_list = ['Form Data', 'Passwords', 'Personal']
             extractor.set_folders_to_read(folder_list)
 
         extractor.extract_from_folders()
