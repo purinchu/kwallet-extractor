@@ -43,3 +43,23 @@ There is also a `--all-fields` option which can be used to show entry types
 other than KWallet's "Password" folder, since some programs used other
 categories for these.
 
+# CSV Output Format
+
+The resulting CSV is generated with a header row and then a line for each entry.
+
+Each line will contain the following fields:
+
+* folder: The folder from within the KWallet that the entry was extracted from.
+  There is likely to be a `Passwords` and `Personal` folder, but applications
+  can (and do) also create their own folders.
+* type: Reflects how the underlying XML was stored.  Will be either `password`
+  (usually just a simple value with an attached name) or `map` (which can
+  contain several name / value pairs and is decoded differently).  KWallet does
+  support other XML fields like `<stream>` but they are not decoded yet.
+* username: The username (or email) that was auto-detected. If not
+  auto-detected it will be empty.
+* website: The website that was auto-detected. If not auto-detected, it will be
+  empty.
+* other: Any remaining data that could not be assigned elsewhere.
+* password: The sensitive password or credential, in plaintext. If not detected
+  it will be empty.
