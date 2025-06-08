@@ -26,10 +26,14 @@ and the script will print out the entries from the file.
 
 ## Options
 
-* `--ignore`: This option allows for excluding from the output any entries that
-have one or more of a specific list of auto-detected issues noted.  This can be
-used multiple times, any single issue is enough to cause the entry to be skipped.
-The issue types are:
+* `--all-fields` (or `-a`): Extract from all available KWallet folders (except
+for Chrome binary form data, for that keep reading). If not set, the
+'Passwords' and 'Personal' folders are read but not app-specific folders such
+as KMail and Kopete.
+* `--ignore` (or `-x`): This option allows for excluding from the output any
+entries that have one or more of a specific list of auto-detected issues
+noted.  This can be used multiple times, any single issue is enough to cause
+the entry to be skipped.  The issue types are:
     * `no_username`: No username was detected.
     * `no_password`: No password was detected.
     * `no_website`: No website was detected.

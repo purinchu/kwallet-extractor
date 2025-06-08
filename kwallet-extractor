@@ -31,9 +31,13 @@ class KWalletPasswordExtractor:
 
         # options
         self.opt_show_chrome_form_data = False
+        self.folders_to_read: set[str] = set()
 
     def set_show_chrome_form_data(self, show: bool) -> None:
         self.opt_show_chrome_form_data = show
+
+    def set_folders_to_read(self, folder_names: list[str]) -> None:
+        self.folders_to_read = set(folder_names)
 
     def extract_from_folder(self, folder: ET.Element) -> None:
         folder_name = folder.attrib.get('name') or ''
@@ -63,6 +67,10 @@ class KWalletPasswordExtractor:
 
             # Ignore Chrome data by default as it is in custom binary format
             if folder_name.startswith("Chrome Form Data") and not self.opt_show_chrome_form_data:
+                continue
+
+            # Ignore the folder if it's not in the set of folders the user wants
+            if len(self.folders_to_read) > 0 and folder_name not in self.folders_to_read:
                 continue
 
             print(f"Handling folder {folder_name} with {num_children} items", file=sys.stderr)
@@ -162,8 +170,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
             description='Extracts passwords and credentials from KWallet XML files'
             )
-#   parser.add_argument('-a', '--all-fields', action='store_true',
-#                       help='Extract from all KWallet folders, not just "Passwords"')
+    parser.add_argument('-a', '--all-fields', action='store_true',
+                        help='Extract from all KWallet folders, not just "Passwords"')
     parser.add_argument('-x', '--ignore', action='append',
                         choices=['no_username', 'no_password', 'newline_in_pw', 'no_website', 'no_issues_noted'],
                         help='Allows for ignoring entries with known issues in the output (can use multiple times)')
@@ -178,9 +186,13 @@ def main() -> None:
 
     try:
         root = parse_xml(args.input)
+
         extractor = KWalletPasswordExtractor(root)
 
         extractor.set_show_chrome_form_data(args.show_chrome_form_data)
+        if not args.all_fields:
+            folder_list = ['Passwords', 'Personal']
+            extractor.set_folders_to_read(folder_list)
 
         extractor.extract_from_folders()
 
