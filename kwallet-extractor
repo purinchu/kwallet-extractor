@@ -25,10 +25,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(
             description='Extracts passwords and credentials from KWallet XML files'
             )
-    parser.add_argument('-a', '--all-fields', action='store_true',
-                        help='Extract from all KWallet folders, not just "Passwords"')
+#   parser.add_argument('-a', '--all-fields', action='store_true',
+#                       help='Extract from all KWallet folders, not just "Passwords"')
+    parser.add_argument('-x', '--ignore', action='append',
+                        choices=['no_username', 'no_password', 'newline_in_pw', 'no_website', 'no_issues_noted'],
+                        help='Allows for ignoring entries with known issues in the output (can use multiple times)')
     parser.add_argument('--show-chrome-form-data', action='store_true',
                         help='Also output Google Chrome form data if present')
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1',
+                        help='Show version output and exit')
     parser.add_argument('input',
                         help='Path to XML export to read')
 
@@ -68,7 +73,7 @@ def main() -> None:
                 out = merge_entries(out, child_entries)
 
         print(f"Recorded {len(out.keys())} credential entries for output", file=sys.stderr)
-        serialize(out)
+        serialize(out, args.ignore)
 
     except Exception as e:
         # Some kind of error encountered
@@ -163,9 +168,12 @@ def extract_map_entries(map_elem: ET.Element, folder_name: str, entry_name: str)
 
     return {entry_name: map_entries}
 
-def serialize(entries: EntryDict) -> None:
+def serialize(entries: EntryDict, filtered_issues: list[str]) -> None:
     fieldnames = ['folder', 'type', 'issues','username', 'website', 'other', 'password']
     writer = csv.DictWriter(sys.stdout, dialect='unix', quoting=csv.QUOTE_MINIMAL, fieldnames=fieldnames)
+
+    # Any entries with a matching issue to this set should be filtered out
+    filter_set = set(filtered_issues)
 
     writer.writeheader()
     for name in sorted(entries):
@@ -182,6 +190,9 @@ def serialize(entries: EntryDict) -> None:
             issues.append('no_website')
         if len(issues) == 0:
             issues.append('no_issues_noted')
+
+        if len(filter_set.intersection(issues)) > 0:
+            continue
 
         entry['issues'] = ';'.join(issues)
 

@@ -24,7 +24,22 @@ low).
 In general, you run the command, passing the name of the XML file with the exported KWallet information,
 and the script will print out the entries from the file.
 
-## Showing Google Chrome data (if present)
+## Options
+
+* `--ignore`: This option allows for excluding from the output any entries that
+have one or more of a specific list of auto-detected issues noted.  This can be
+used multiple times, any single issue is enough to cause the entry to be skipped.
+The issue types are:
+    * `no_username`: No username was detected.
+    * `no_password`: No password was detected.
+    * `no_website`: No website was detected.
+    * `newline_in_pw`: The password is a multi-line entry (probably needs manual review)
+    * `no_issues_noted`: Nothing out of the ordinary (use this if you want to look only at problematic entries)
+* `--show-chrome-form-data`: See below.
+* `--help`: Show help output and exit.
+* `--version`: Show version output and exit.
+
+### Showing Google Chrome data (if present)
 
 Note that by default that Google Chrome form data entries that may be present
 are not output, as the historical form data format uses a binary format that is
@@ -36,12 +51,6 @@ the KWallet-stored text based into the Chrome binary format (make sure to redire
 
 Tools like xxd or hexdump can be used to piece through the binary data,
 usernames and passwords will not be hard to piece out.
-
-## Showing non-password fields
-
-There is also a `--all-fields` option which can be used to show entry types
-other than KWallet's "Password" folder, since some programs used other
-categories for these.
 
 # CSV Output Format
 
