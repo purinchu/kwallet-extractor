@@ -6,11 +6,18 @@
 # ///
 
 from typing import Any, TypeAlias
+
 import argparse
+import csv
+import json
 import sys
 import xml.etree.ElementTree as ET
 
-EntryDict: TypeAlias = dict[str, str]
+EntryDict: TypeAlias = dict[str, dict[str, str]]
+
+# global to disambiguate credential entries
+g_key_id: int = 0
+g_seen_set: set[str] = set()
 
 # "uv tool run mypy --strict kwallet-extractor" for type checking
 def main() -> None:
@@ -71,12 +78,33 @@ def main() -> None:
 
 def merge_entries(parent: EntryDict, children: EntryDict) -> EntryDict:
     out = parent
+    global g_key_id
+
+    # used so we don't go crazy for when the 2nd and later dupes are all
+    # different from first one seen
+    global g_seen_set
 
     for key in children:
-        if key in out and out[key] != children[key]:
-            raise Exception(f"Value for {key} would be overwritten by a different value!")
+        renamed_key = key # name to use in `out`, which may be different
 
-    out |= children
+        if key in out:
+            # See if there are difference in value and if so, rename one.  But
+            # only do this if the values are actually different, otherwise
+            # duplicate entries in the original XML will be re-duplicated in
+            # the output.
+            base_subval  = json.dumps(out[key],      sort_keys=True)
+            child_subval = json.dumps(children[key], sort_keys=True)
+            set_key = '/'.join([key, base_subval])
+
+            if base_subval != child_subval and (not set_key in g_seen_set):
+                while renamed_key in out:
+                    g_key_id += 1
+                    renamed_key = '/'.join([key, str(g_key_id)])
+
+            g_seen_set.add(set_key)
+
+        out[renamed_key] = children[key]
+
     return out
 
 def extract_pw_entry(pw_elem: ET.Element, base_key: str) -> EntryDict:
@@ -84,12 +112,19 @@ def extract_pw_entry(pw_elem: ET.Element, base_key: str) -> EntryDict:
         raise Exception(f"Encountered <{pw_elem.tag}> when <password> expected!")
 
     value = pw_elem.text or ''
-    map_entries = { base_key: value }
+    map_entries = {
+        'other': base_key,
+        'password': value,
+        }
 
-    return map_entries
+    return {pw_elem.attrib.get('name', ''): map_entries}
 
 def extract_map_entries(map_elem: ET.Element, base_key: str) -> EntryDict:
     map_entries = dict()
+    entry_name = map_elem.attrib.get('name', '')
+
+    # Most <map> sequences have the website in the name= field
+    map_entries['website'] = entry_name
 
     for child_entry in map_elem:
         if child_entry.tag != 'mapentry':
@@ -110,14 +145,23 @@ def extract_map_entries(map_elem: ET.Element, base_key: str) -> EntryDict:
         if len(child_entry_value) < 1:
             continue
 
-        key = '/'.join([base_key, child_entry_name])
-        map_entries[key] = child_entry_value
+        map_key = 'other'
+        if 'pass' in child_entry_name:
+            map_key = 'password'
+        elif 'user' in child_entry_name or 'login' in child_entry_name:
+            map_key = 'username'
 
-    return map_entries
+        map_entries[map_key] = child_entry_value
+
+    return {entry_name: map_entries}
 
 def serialize(entries: EntryDict) -> None:
-    for name, pw in sorted(entries.items()):
-        print (f'{name},"{pw}"')
+    fieldnames = ['username', 'website', 'other', 'password']
+    writer = csv.DictWriter(sys.stdout, dialect='unix', quoting=csv.QUOTE_MINIMAL, fieldnames=fieldnames)
+
+    writer.writeheader()
+    for name in sorted(entries):
+        writer.writerow(entries[name])
 
 def parse_xml(filename: str) -> ET.Element:
     tree = ET.parse(filename)
