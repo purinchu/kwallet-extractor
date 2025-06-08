@@ -40,6 +40,7 @@ the entry to be skipped.  The issue types are:
     * `newline_in_pw`: The password is a multi-line entry (probably needs manual review)
     * `no_issues_noted`: Nothing out of the ordinary (use this if you want to look only at problematic entries)
 * `--show-chrome-form-data`: See below.
+* `--verbose`: Show additional output that can be interesting but is not normally useful.
 * `--help`: Show help output and exit.
 * `--version`: Show version output and exit.
 

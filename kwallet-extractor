@@ -32,12 +32,16 @@ class KWalletPasswordExtractor:
         # options
         self.opt_show_chrome_form_data = False
         self.folders_to_read: set[str] = set()
+        self.verbose = False
 
     def set_show_chrome_form_data(self, show: bool) -> None:
         self.opt_show_chrome_form_data = show
 
     def set_folders_to_read(self, folder_names: list[str]) -> None:
         self.folders_to_read = set(folder_names)
+
+    def set_verbose(self, be_verbose: bool) -> None:
+        self.verbose = be_verbose
 
     def extract_from_folder(self, folder: ET.Element) -> None:
         folder_name = folder.attrib.get('name') or ''
@@ -49,7 +53,7 @@ class KWalletPasswordExtractor:
             if len(entry) == 0: # No children
                 if entry.tag == 'password': # 99.9% of time
                     child_entries = self.extract_pw_entry(entry, folder_name, entry_name)
-                else:
+                elif self.verbose:
                     # But a <stream> is also possible, and unhandled
                     print(f"Ignoring <{entry.tag}> data under {folder_name}/{entry_name}", file=sys.stderr)
             else:
@@ -73,7 +77,8 @@ class KWalletPasswordExtractor:
             if len(self.folders_to_read) > 0 and folder_name not in self.folders_to_read:
                 continue
 
-            print(f"Handling folder {folder_name} with {num_children} items", file=sys.stderr)
+            if self.verbose:
+                print(f"Handling folder {folder_name} with {num_children} items", file=sys.stderr)
 
             self.extract_from_folder(folder)
 
@@ -145,7 +150,8 @@ class KWalletPasswordExtractor:
             # Bugzilla passwords there will be a <mapentry name="">password</mapentry> with two more
             # 'normal' map entries with the actual username/password.
             if child_entry_name is None or len(child_entry_name) < 1:
-                print (f"Ignoring mapentry for {folder_name}/{entry_name} with an empty name", file=sys.stderr)
+                if self.verbose:
+                    print (f"Ignoring mapentry for {folder_name}/{entry_name} with an empty name", file=sys.stderr)
                 continue
 
             # Likewise there can be empty form data values for things like address fields left blank.
@@ -177,6 +183,8 @@ def main() -> None:
                         help='Allows for ignoring entries with known issues in the output (can use multiple times)')
     parser.add_argument('--show-chrome-form-data', action='store_true',
                         help='Also output Google Chrome form data if present')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Show additional output (not usually of interest)')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1',
                         help='Show version output and exit')
     parser.add_argument('input',
@@ -190,6 +198,7 @@ def main() -> None:
         extractor = KWalletPasswordExtractor(root)
 
         extractor.set_show_chrome_form_data(args.show_chrome_form_data)
+        extractor.set_verbose(args.verbose)
         if not args.all_fields:
             folder_list = ['Passwords', 'Personal']
             extractor.set_folders_to_read(folder_list)
@@ -198,7 +207,9 @@ def main() -> None:
 
         issue_filt = args.ignore or []
 
-        print(f"Recorded {len(extractor.out.keys())} credential entries for output", file=sys.stderr)
+        if args.verbose:
+            print(f"Recorded {len(extractor.out.keys())} credential entries for output", file=sys.stderr)
+
         serialize(extractor.out, issue_filt)
 
     except Exception as e:
