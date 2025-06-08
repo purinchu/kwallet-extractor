@@ -160,10 +160,20 @@ class KWalletPasswordExtractor:
                 continue
 
             map_key = 'other'
-            if 'pass' in child_entry_name:
+            lc_child_entry_name = child_entry_name.lower()
+
+            if 'pass' in lc_child_entry_name or 'pwd' in lc_child_entry_name:
                 map_key = 'password'
-            elif 'user' in child_entry_name or 'login' in child_entry_name:
-                map_key = 'username'
+            else:
+                user_guesses = ['user', 'login']
+                for guess in user_guesses:
+                    if guess in lc_child_entry_name:
+                        map_key = 'username'
+                        break
+
+                exact_guesses = set(['un', 'wpname', 'name'])
+                if lc_child_entry_name in exact_guesses:
+                    map_key = 'username'
 
             map_entries[map_key] = child_entry_value
 
@@ -232,6 +242,11 @@ def serialize(entries: EntryDict, filtered_issues: list[str], use_json: bool) ->
     for name in sorted(entries):
         entry = entries[name]
         issues = list()
+
+        if entry['password'] == '':
+            # See if there's an 'other' entry that might have pw
+            entry['password'] = entry['other']
+            entry['other'] = ''
 
         if len(entry['username']) == 0:
             issues.append('no_username')
