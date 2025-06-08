@@ -248,6 +248,11 @@ def serialize(entries: EntryDict, filtered_issues: list[str], use_json: bool) ->
             entry['password'] = entry['other']
             entry['other'] = ''
 
+        if entry['username'] == '':
+            # If password was OK, let's see if the username can be fixed
+            entry['username'] = entry['other']
+            entry['other'] = ''
+
         if len(entry['username']) == 0:
             issues.append('no_username')
         if len(entry['password']) == 0:
