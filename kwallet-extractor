@@ -11,13 +11,150 @@ import argparse
 import csv
 import json
 import sys
+import traceback
 import xml.etree.ElementTree as ET
 
 EntryDict: TypeAlias = dict[str, dict[str, str]]
 
-# global to disambiguate credential entries
-g_key_id: int = 0
-g_seen_set: set[str] = set()
+class KWalletPasswordExtractor:
+    def __init__(self, xml_root: ET.Element) -> None:
+        self.root = xml_root # Decoded KWallet XML data
+
+        # Holds accumulated entries
+        self.out: EntryDict = dict()
+
+        # used to disambiguate credential entries
+        self.key_id: int = 0
+        # this set avoids repeated renaming when the 2nd..n versions of a key
+        # are all different from the 1st but otherwise identical
+        self.seen_set: set[str] = set()
+
+        # options
+        self.opt_show_chrome_form_data = False
+
+    def set_show_chrome_form_data(self, show: bool) -> None:
+        self.opt_show_chrome_form_data = show
+
+    def extract_from_folder(self, folder: ET.Element) -> None:
+        folder_name = folder.attrib.get('name') or ''
+
+        for entry in folder:
+            entry_name = entry.attrib.get('name') or ''
+            child_entries: EntryDict = dict()
+
+            if len(entry) == 0: # No children
+                if entry.tag == 'password': # 99.9% of time
+                    child_entries = self.extract_pw_entry(entry, folder_name, entry_name)
+                else:
+                    # But a <stream> is also possible, and unhandled
+                    print(f"Ignoring <{entry.tag}> data under {folder_name}/{entry_name}", file=sys.stderr)
+            else:
+                child_entries = self.extract_map_entries(entry, folder_name, entry_name)
+
+            self.out = self.merge_entries(self.out, child_entries)
+
+    def extract_from_folders(self) -> None:
+        for folder in self.root:
+            if folder.tag != 'folder':
+                raise Exception(f"Encountered invalid folder tag <{folder.tag}>")
+
+            folder_name = folder.attrib.get('name', '')
+            num_children = len(folder)
+
+            # Ignore Chrome data by default as it is in custom binary format
+            if folder_name.startswith("Chrome Form Data") and not self.opt_show_chrome_form_data:
+                continue
+
+            print(f"Handling folder {folder_name} with {num_children} items", file=sys.stderr)
+
+            self.extract_from_folder(folder)
+
+    """ Merges in duplicate entries as-is. Entries that would overwrite a key
+    with different data have their key renamed and both versions are retained.
+    """
+    def merge_entries(self, parent: EntryDict, children: EntryDict) -> EntryDict:
+        out = parent
+
+        for key in children:
+            renamed_key = key # name to use in `out`, which may be different
+
+            if key in out:
+                # See if there are difference in value and if so, rename one.  But
+                # only do this if the values are actually different, otherwise
+                # duplicate entries in the original XML will be re-duplicated in
+                # the output.
+                base_subval  = json.dumps(out[key],      sort_keys=True)
+                child_subval = json.dumps(children[key], sort_keys=True)
+                set_key = '/'.join([key, base_subval])
+
+                if base_subval != child_subval and (not set_key in self.seen_set):
+                    while renamed_key in out:
+                        self.key_id += 1
+                        renamed_key = '/'.join([key, str(self.key_id)])
+
+                self.seen_set.add(set_key)
+
+            out[renamed_key] = children[key]
+
+        return out
+
+    def extract_pw_entry(self, pw_elem: ET.Element, folder_name: str, entry_name: str) -> EntryDict:
+        if pw_elem.tag != 'password':
+            raise Exception(f"Encountered <{pw_elem.tag}> when <password> expected!")
+
+        value = pw_elem.text or ''
+        map_entries = {
+            'folder': folder_name,
+            'type': 'password',
+            'username': '',
+            'website': '',
+            'other': entry_name,
+            'password': value,
+            }
+
+        return {entry_name: map_entries}
+
+    def extract_map_entries(self, map_elem: ET.Element, folder_name: str, entry_name: str) -> EntryDict:
+        map_entries = dict()
+
+        map_entries = {
+            'folder': folder_name,
+            'type': 'map',
+            'username': '',
+            'website': entry_name, # most <map> sequences have the website in the name field
+            'other': '',
+            'password': '',
+            }
+
+        for child_entry in map_elem:
+            if child_entry.tag != 'mapentry':
+                raise Exception(f"Encountered <{child_entry.tag}> when <mapentry> expected!")
+
+            child_entry_name = child_entry.attrib.get('name')
+            child_entry_value = child_entry.text or ''
+
+            # This can happen on old XML exports dating back to KDE 3 times, apparently. For some of my
+            # Bugzilla passwords there will be a <mapentry name="">password</mapentry> with two more
+            # 'normal' map entries with the actual username/password.
+            if child_entry_name is None or len(child_entry_name) < 1:
+                print (f"Ignoring mapentry for {folder_name}/{entry_name} with an empty name", file=sys.stderr)
+                continue
+
+            # Likewise there can be empty form data values for things like address fields left blank.
+            # We can just skip these without a warning
+            if len(child_entry_value) < 1:
+                continue
+
+            map_key = 'other'
+            if 'pass' in child_entry_name:
+                map_key = 'password'
+            elif 'user' in child_entry_name or 'login' in child_entry_name:
+                map_key = 'username'
+
+            map_entries[map_key] = child_entry_value
+
+        return {entry_name: map_entries}
+
 
 # "uv tool run mypy --strict kwallet-extractor" for type checking
 def main() -> None:
@@ -41,132 +178,22 @@ def main() -> None:
 
     try:
         root = parse_xml(args.input)
+        extractor = KWalletPasswordExtractor(root)
 
-        out: EntryDict = dict()
+        extractor.set_show_chrome_form_data(args.show_chrome_form_data)
 
-        for folder in root:
-            if folder.tag != 'folder':
-                raise Exception(f"Encountered invalid folder tag <{folder.tag}>")
+        extractor.extract_from_folders()
 
-            folder_name = folder.attrib.get('name', '')
-            num_children = len(folder)
+        issue_filt = args.ignore or []
 
-            # Ignore Chrome data by default as it is in custom binary format
-            if folder_name.startswith("Chrome Form Data") and not args.show_chrome_form_data:
-                continue
-
-            print(f"Handling folder {folder_name} with {num_children} items", file=sys.stderr)
-
-            for entry in folder:
-                entry_name = entry.attrib.get('name') or ''
-                child_entries: EntryDict = dict()
-
-                if len(entry) == 0: # No children
-                    if entry.tag == 'password': # 99.9% of time
-                        child_entries = extract_pw_entry(entry, folder_name, entry_name)
-                    else:
-                        # But a <stream> is also possible, and unhandled
-                        print(f"Ignoring <{entry.tag}> data under {folder_name}/{entry_name}", file=sys.stderr)
-                else:
-                    child_entries = extract_map_entries(entry, folder_name, entry_name)
-
-                out = merge_entries(out, child_entries)
-
-        print(f"Recorded {len(out.keys())} credential entries for output", file=sys.stderr)
-        serialize(out, args.ignore)
+        print(f"Recorded {len(extractor.out.keys())} credential entries for output", file=sys.stderr)
+        serialize(extractor.out, issue_filt)
 
     except Exception as e:
         # Some kind of error encountered
         print(f"Ran into an error while reading {args.input}:\n{e}", file=sys.stderr)
+        traceback.print_exc()
         sys.exit(1)
-
-def merge_entries(parent: EntryDict, children: EntryDict) -> EntryDict:
-    out = parent
-    global g_key_id
-
-    # used so we don't go crazy for when the 2nd and later dupes are all
-    # different from first one seen
-    global g_seen_set
-
-    for key in children:
-        renamed_key = key # name to use in `out`, which may be different
-
-        if key in out:
-            # See if there are difference in value and if so, rename one.  But
-            # only do this if the values are actually different, otherwise
-            # duplicate entries in the original XML will be re-duplicated in
-            # the output.
-            base_subval  = json.dumps(out[key],      sort_keys=True)
-            child_subval = json.dumps(children[key], sort_keys=True)
-            set_key = '/'.join([key, base_subval])
-
-            if base_subval != child_subval and (not set_key in g_seen_set):
-                while renamed_key in out:
-                    g_key_id += 1
-                    renamed_key = '/'.join([key, str(g_key_id)])
-
-            g_seen_set.add(set_key)
-
-        out[renamed_key] = children[key]
-
-    return out
-
-def extract_pw_entry(pw_elem: ET.Element, folder_name: str, entry_name: str) -> EntryDict:
-    if pw_elem.tag != 'password':
-        raise Exception(f"Encountered <{pw_elem.tag}> when <password> expected!")
-
-    value = pw_elem.text or ''
-    map_entries = {
-        'folder': folder_name,
-        'type': 'password',
-        'username': '',
-        'website': '',
-        'other': entry_name,
-        'password': value,
-        }
-
-    return {entry_name: map_entries}
-
-def extract_map_entries(map_elem: ET.Element, folder_name: str, entry_name: str) -> EntryDict:
-    map_entries = dict()
-
-    map_entries = {
-        'folder': folder_name,
-        'type': 'map',
-        'username': '',
-        'website': entry_name, # most <map> sequences have the website in the name field
-        'other': '',
-        'password': '',
-        }
-
-    for child_entry in map_elem:
-        if child_entry.tag != 'mapentry':
-            raise Exception(f"Encountered <{child_entry.tag}> when <mapentry> expected!")
-
-        child_entry_name = child_entry.attrib.get('name')
-        child_entry_value = child_entry.text or ''
-
-        # This can happen on old XML exports dating back to KDE 3 times, apparently. For some of my
-        # Bugzilla passwords there will be a <mapentry name="">password</mapentry> with two more
-        # 'normal' map entries with the actual username/password.
-        if child_entry_name is None or len(child_entry_name) < 1:
-            print (f"Ignoring mapentry for {folder_name}/{entry_name} with an empty name", file=sys.stderr)
-            continue
-
-        # Likewise there can be empty form data values for things like address fields left blank.
-        # We can just skip these without a warning
-        if len(child_entry_value) < 1:
-            continue
-
-        map_key = 'other'
-        if 'pass' in child_entry_name:
-            map_key = 'password'
-        elif 'user' in child_entry_name or 'login' in child_entry_name:
-            map_key = 'username'
-
-        map_entries[map_key] = child_entry_value
-
-    return {entry_name: map_entries}
 
 def serialize(entries: EntryDict, filtered_issues: list[str]) -> None:
     fieldnames = ['folder', 'type', 'issues','username', 'website', 'other', 'password']
