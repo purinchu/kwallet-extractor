@@ -16,6 +16,8 @@ import xml.etree.ElementTree as ET
 
 EntryDict: TypeAlias = dict[str, dict[str, str]]
 
+g_version: str = '0.2' # program version
+
 class KWalletPasswordExtractor:
     def __init__(self, xml_root: ET.Element) -> None:
         self.root = xml_root # Decoded KWallet XML data
@@ -203,7 +205,7 @@ def main() -> None:
                         help='Also output Google Chrome form data if present')
     parser.add_argument('--verbose', action='store_true',
                         help='Show additional output on standard error (not usually of interest)')
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1',
+    parser.add_argument('-v', '--version', action='version', version=('%(prog)s ' + g_version),
                         help='Show version output and exit')
     parser.add_argument('input',
                         help='Path to XML export to read')

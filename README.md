@@ -2,6 +2,8 @@
 
     ./kwallet-extractor.py /path/to/kwallet/export.xml
 
+Current version is 0.2
+
 # Description
 
 This reads in exported (and unencrypted!) XML exports of KWallet wallets, and
