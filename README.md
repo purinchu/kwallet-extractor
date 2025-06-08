@@ -39,6 +39,8 @@ the entry to be skipped.  The issue types are:
     * `no_website`: No website was detected.
     * `newline_in_pw`: The password is a multi-line entry (probably needs manual review)
     * `no_issues_noted`: Nothing out of the ordinary (use this if you want to look only at problematic entries)
+* `--format` (or `-f`): Allows for choosing a different output format. Currently
+you can choose `csv` (the default) or `json`.
 * `--show-chrome-form-data`: See below.
 * `--verbose`: Show additional output that can be interesting but is not normally useful.
 * `--help`: Show help output and exit.
@@ -57,9 +59,10 @@ the KWallet-stored text based into the Chrome binary format (make sure to redire
 Tools like xxd or hexdump can be used to piece through the binary data,
 usernames and passwords will not be hard to piece out.
 
-# CSV Output Format
+# Output Format
 
-The resulting CSV is generated with a header row and then a line for each entry.
+When output as a CSV, the output will be generated with a header row and then a
+line for each entry.
 
 Each line will contain the following fields:
 
@@ -77,3 +80,8 @@ Each line will contain the following fields:
 * other: Any remaining data that could not be assigned elsewhere.
 * password: The sensitive password or credential, in plaintext. If not detected
   it will be empty.
+
+## JSON Format
+
+For JSON output the output will be an array of objects, each object will have
+the fields as described above for CSV output.

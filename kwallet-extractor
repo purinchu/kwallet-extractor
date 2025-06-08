@@ -178,13 +178,16 @@ def main() -> None:
             )
     parser.add_argument('-a', '--all-fields', action='store_true',
                         help='Extract from all KWallet folders, not just "Passwords"')
+    parser.add_argument('-f', '--format', default='csv',
+                        choices=['csv', 'json'],
+                        help='Format to use for output entries (default is csv)')
     parser.add_argument('-x', '--ignore', action='append',
                         choices=['no_username', 'no_password', 'newline_in_pw', 'no_website', 'no_issues_noted'],
                         help='Allows for ignoring entries with known issues in the output (can use multiple times)')
     parser.add_argument('--show-chrome-form-data', action='store_true',
                         help='Also output Google Chrome form data if present')
     parser.add_argument('--verbose', action='store_true',
-                        help='Show additional output (not usually of interest)')
+                        help='Show additional output on standard error (not usually of interest)')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1',
                         help='Show version output and exit')
     parser.add_argument('input',
@@ -210,7 +213,8 @@ def main() -> None:
         if args.verbose:
             print(f"Recorded {len(extractor.out.keys())} credential entries for output", file=sys.stderr)
 
-        serialize(extractor.out, issue_filt)
+        use_json = args.format == 'json'
+        serialize(extractor.out, issue_filt, use_json)
 
     except Exception as e:
         # Some kind of error encountered
@@ -218,14 +222,13 @@ def main() -> None:
         traceback.print_exc()
         sys.exit(1)
 
-def serialize(entries: EntryDict, filtered_issues: list[str]) -> None:
-    fieldnames = ['folder', 'type', 'issues','username', 'website', 'other', 'password']
-    writer = csv.DictWriter(sys.stdout, dialect='unix', quoting=csv.QUOTE_MINIMAL, fieldnames=fieldnames)
+def serialize(entries: EntryDict, filtered_issues: list[str], use_json: bool) -> None:
+    results = list()
 
+    # filter results, then print them out in the appropriate format
     # Any entries with a matching issue to this set should be filtered out
     filter_set = set(filtered_issues)
 
-    writer.writeheader()
     for name in sorted(entries):
         entry = entries[name]
         issues = list()
@@ -246,7 +249,16 @@ def serialize(entries: EntryDict, filtered_issues: list[str]) -> None:
 
         entry['issues'] = ';'.join(issues)
 
-        writer.writerow(entries[name])
+        results.append(entries[name])
+
+    if use_json:
+        print(json.dumps(results))
+    else:
+        fieldnames = ['folder', 'type', 'issues','username', 'website', 'other', 'password']
+        writer = csv.DictWriter(sys.stdout, dialect='unix', quoting=csv.QUOTE_MINIMAL, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in results:
+            writer.writerow(row)
 
 def parse_xml(filename: str) -> ET.Element:
     tree = ET.parse(filename)
