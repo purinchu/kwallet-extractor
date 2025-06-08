@@ -176,6 +176,8 @@ def serialize(entries: EntryDict) -> None:
             issues.append('no_username')
         if len(entry['password']) == 0:
             issues.append('no_password')
+        if "\n" in entry['password']:
+            issues.append('newline_in_pw')
         if len(entry['website']) == 0:
             issues.append('no_website')
         if len(issues) == 0:
